@@ -21,7 +21,7 @@ proof: Range proof as a byte array
 Return:
 Size of proof. O in case of errors.
 */
-pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_return: *mut u8, mut blinding_return: *mut u8, mut proof_return: *mut u8) -> usize {
+pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_return: *mut [u8;32], mut blinding_return: *mut [u8;32], mut proof_return: *mut u8) -> usize {
 
     let pc_gens = PedersenGens::default();
     
@@ -29,7 +29,6 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_retu
     let bp_gens =  BulletproofGens::new(64, 1);
 
     // The API takes a blinding factor for the commitment.
-    // TODO: This blinding factor must be the same for each user, so must be sent as an argument
     let blinding = Scalar::random(&mut thread_rng());
 
     // The proof can be chained to an existing transcript.
@@ -37,7 +36,7 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_retu
     let mut prover_transcript = Transcript::new(b"hello");
 
     // Create a 64-bit rangeproof.
-    let (proof, committed_value) = match RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, secret_value, &blinding, range) {
+    let (proof, commitment) = match RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, secret_value, &blinding, range) {
         Ok(ret) => ret,
         Err(err) => {
             println!("{}", err.to_string());
@@ -45,9 +44,31 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_retu
         }
     };
 
-    // blinding_return = blinding.to_bytes().as_mut_ptr();
-    commitment_return = committed_value.to_bytes().as_mut_ptr();
-    println!("Step 1: Commited Value: {:?}", committed_value.to_bytes());
+    if commitment_return.is_null() || blinding_return.is_null() {
+        return 0;
+    }
+
+    // let commitment_return: &mut [u8;32] = unsafe {
+    //     &mut *commitment_return
+    // };
+
+    // *commitment_return = commitment.to_bytes();
+
+    unsafe {
+        *commitment_return = commitment.to_bytes();
+    }
+
+    let blinding_return: &mut [u8; 32] = unsafe {
+        &mut *blinding_return
+    };
+
+    *blinding_return = blinding.to_bytes();
+
+    // for (src, dst) in commitment.to_bytes().iter().zip(commitment_return.iter_mut()) {
+    //     *dst = *src;
+    // }
+
+    println!("Step 1: Commited Value: {:?}", commitment.to_bytes());
 
     proof_return = proof.to_bytes().as_mut_ptr();
     let proof_size_return = proof.to_bytes().len();

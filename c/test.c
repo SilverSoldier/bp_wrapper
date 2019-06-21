@@ -11,6 +11,7 @@ int main() {
   int exp_ps = (2 * log2(range) + 9) * 32;
   char *proof = (char*) malloc(sizeof(char) * exp_ps);
   size_t act_ps = gen_proof(num, range, commitment, blinding, proof);
+
   int i = 0;
   for(; i < 32; i++) {
 	printf("%d ", commitment[i]);
