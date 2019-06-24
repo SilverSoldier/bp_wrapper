@@ -21,7 +21,7 @@ proof: Range proof as a byte array
 Return:
 Size of proof. O in case of errors.
 */
-pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_return: *mut [u8;32], mut blinding_return: *mut [u8;32], mut proof_return: *mut u8) -> usize {
+pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], mut proof_return: *mut [u8]) -> usize {
 
     let pc_gens = PedersenGens::default();
     
@@ -35,7 +35,6 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_retu
     // Here we create a transcript with a doctest domain separator.
     let mut prover_transcript = Transcript::new(b"hello");
 
-    // Create a 64-bit rangeproof.
     let (proof, commitment) = match RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, secret_value, &blinding, range) {
         Ok(ret) => ret,
         Err(err) => {
@@ -44,34 +43,22 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, mut commitment_retu
         }
     };
 
-    if commitment_return.is_null() || blinding_return.is_null() {
+    if commitment_return.is_null() || blinding_return.is_null() || proof_return.is_null() {
         return 0;
     }
 
-    // let commitment_return: &mut [u8;32] = unsafe {
-    //     &mut *commitment_return
-    // };
-
-    // *commitment_return = commitment.to_bytes();
-
     unsafe {
         *commitment_return = commitment.to_bytes();
+        *blinding_return = blinding.to_bytes();
     }
 
-    let blinding_return: &mut [u8; 32] = unsafe {
-        &mut *blinding_return
-    };
+    let pr_rt: &mut[u8] = unsafe { proof_return.as_mut().unwrap() };
 
-    *blinding_return = blinding.to_bytes();
+    pr_rt.copy_from_slice(&proof.to_bytes());
 
-    // for (src, dst) in commitment.to_bytes().iter().zip(commitment_return.iter_mut()) {
-    //     *dst = *src;
-    // }
-
-    println!("Step 1: Commited Value: {:?}", commitment.to_bytes());
-
-    proof_return = proof.to_bytes().as_mut_ptr();
     let proof_size_return = proof.to_bytes().len();
+
+    println!("Step 1: Proof: {:?}", proof.to_bytes());
 
     return proof_size_return;
 }
