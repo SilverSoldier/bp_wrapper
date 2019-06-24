@@ -5,7 +5,7 @@ extern crate rand;
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use wrapper::curve25519_dalek::{scalar::Scalar, ristretto::CompressedRistretto};
 use self::merlin::Transcript;
-use self::rand::thread_rng;
+use self::rand::{thread_rng, Rng};
 use std::slice;
 
 #[no_mangle]
@@ -21,7 +21,7 @@ proof: Range proof as a byte array
 Return:
 Size of proof. O in case of errors.
 */
-pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], mut proof_return: *mut [u8]) -> usize {
+pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], proof_return: *mut [u8]) -> usize {
 
     let pc_gens = PedersenGens::default();
     
@@ -52,19 +52,17 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: 
         *blinding_return = blinding.to_bytes();
     }
 
-    let pr_rt: &mut[u8] = unsafe { proof_return.as_mut().unwrap() };
+    let proof_ref: &mut[u8] = unsafe { proof_return.as_mut().unwrap() };
 
-    pr_rt.copy_from_slice(&proof.to_bytes());
+    proof_ref.copy_from_slice(&proof.to_bytes());
 
     let proof_size_return = proof.to_bytes().len();
-
-    println!("Step 1: Proof: {:?}", proof.to_bytes());
 
     return proof_size_return;
 }
 
 #[no_mangle]
-pub fn verify_proof(proof: *const u8, proof_size: usize, commitment: *const u8, range: usize) -> bool {
+pub extern "C" fn verify_proof(proof: *const u8, proof_size: usize, commitment: *const u8, range: usize) -> bool {
     let mut verifier_transcript = Transcript::new(b"hello");
 
     let pc_gens = PedersenGens::default();
@@ -92,7 +90,7 @@ pub fn verify_proof(proof: *const u8, proof_size: usize, commitment: *const u8, 
 
     let commitment = CompressedRistretto::from_slice(commitment_bytes);
 
-    println!("Commited Value: {:?}", commitment);
+    // println!("Commited Value: {:?}", commitment);
 
     let range_proof = match RangeProof::from_bytes(proof_bytes) {
         Ok(proof) => proof,
@@ -110,3 +108,9 @@ pub fn verify_proof(proof: *const u8, proof_size: usize, commitment: *const u8, 
         }
     }
 }
+
+#[no_mangle]
+pub extern "C" fn get_rand() -> i32 {
+    rand::thread_rng().gen()
+}
+    
