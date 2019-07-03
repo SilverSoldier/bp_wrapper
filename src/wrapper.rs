@@ -5,7 +5,7 @@ extern crate rand;
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use wrapper::curve25519_dalek::{scalar::Scalar, ristretto::CompressedRistretto};
 use self::merlin::Transcript;
-use self::rand::{thread_rng, Rng};
+use self::rand::{thread_rng};
 use std::slice;
 
 #[no_mangle]
@@ -22,6 +22,10 @@ Return:
 Size of proof. O in case of errors.
 */
 pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], proof_return: *mut [u8]) -> usize {
+
+    if commitment_return.is_null() || blinding_return.is_null() || proof_return.is_null() {
+        return 0;
+    }
 
     let pc_gens = PedersenGens::default();
     
@@ -42,10 +46,6 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: 
             return 0;
         }
     };
-
-    if commitment_return.is_null() || blinding_return.is_null() || proof_return.is_null() {
-        return 0;
-    }
 
     unsafe {
         *commitment_return = commitment.to_bytes();
@@ -110,7 +110,51 @@ pub extern "C" fn verify_proof(proof: *const u8, proof_size: usize, commitment: 
 }
 
 #[no_mangle]
-pub extern "C" fn get_rand() -> i32 {
-    rand::thread_rng().gen()
+pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitment_return: *mut [u8;32]) {
+    if commitment_return.is_null() {
+        return
+    }
+
+    let value_bytes = unsafe {
+        if value.is_null() {
+            println!("Value is null.");
+            return
+        }
+        slice::from_raw_parts(value, 32)
+    };
+
+    let blinding_bytes = unsafe {
+        if blinding.is_null() {
+            println!("Blinding is null.");
+            return
+        }
+        slice::from_raw_parts(blinding, 32)
+    };
+
+    let mut value_array = [0; 32];
+    let mut blinding_array = [0; 32];
+
+    println!("{:?}", value_bytes);
+
+    value_array.copy_from_slice(value_bytes);
+    blinding_array.copy_from_slice(blinding_bytes);
+
+    let pc_gens = PedersenGens::default();
+
+    let val_scalar = Scalar::from_bits(value_array);
+    let blinding_scalar = Scalar::from_bits(blinding_array);
+
+    let commitment = pc_gens.commit(val_scalar, blinding_scalar).compress();
+
+    println!("{:?}", commitment);
+
+    unsafe {
+        *commitment_return = commitment.to_bytes();
+    };
 }
     
+// #[no_mangle]
+// pub extern "C" fn gen_commitment0(value: [u8;32], commitment_return: *mut [u8;32]) {
+//     let zero = Scalar::zero();
+//     gen_commitment(value, zero.to_bytes(), commitment_return);
+// }
