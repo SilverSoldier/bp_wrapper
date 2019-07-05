@@ -21,7 +21,7 @@ proof: Range proof as a byte array
 Return:
 Size of proof. O in case of errors.
 */
-pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], proof_return: *mut [u8]) -> usize {
+pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], proof_return: *mut u8) -> usize {
 
     if commitment_return.is_null() || blinding_return.is_null() || proof_return.is_null() {
         return 0;
@@ -52,13 +52,13 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: 
         *blinding_return = blinding.to_bytes();
     }
 
-    let proof_ref: &mut[u8] = unsafe { proof_return.as_mut().unwrap() };
+    let proof_bytes = proof.to_bytes();
 
-    proof_ref.copy_from_slice(&proof.to_bytes());
+    let proof_ref: &mut[u8] = unsafe { slice::from_raw_parts_mut(proof_return, proof_bytes.len())};
 
-    let proof_size_return = proof.to_bytes().len();
+    proof_ref.copy_from_slice(&proof_bytes);
 
-    return proof_size_return;
+    return proof_bytes.len();
 }
 
 #[no_mangle]
