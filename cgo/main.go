@@ -49,9 +49,6 @@ func test_mult_commitment() bool {
 	gval20 := make([]byte, 32)
 	gzero := make([]byte, 32)
 
-	gexp_comm20 := make([]byte, 32)
-	gact_comm20 := make([]byte, 32)
-
 	ccomm10 := (*C.char)(C.calloc(32, C.sizeof_char))
 	cexp_comm20 := (*C.char)(C.calloc(32, C.sizeof_char))
 	cact_comm20 := (*C.char)(C.calloc(32, C.sizeof_char))
@@ -68,8 +65,8 @@ func test_mult_commitment() bool {
 	C.mult_commitment(ccomm10, 2, cact_comm20)
 
 	// Convert the C values of the variables that should be read to Go
-	gexp_comm20 = C.GoBytes((unsafe.Pointer)(cexp_comm20), 32)
-	gact_comm20 = C.GoBytes((unsafe.Pointer)(cact_comm20), 32)
+	gexp_comm20 := C.GoBytes((unsafe.Pointer)(cexp_comm20), 32)
+	gact_comm20 := C.GoBytes((unsafe.Pointer)(cact_comm20), 32)
 
 	for i := 0; i < 32; i++ {
 		if gexp_comm20[i] != gact_comm20[i] {

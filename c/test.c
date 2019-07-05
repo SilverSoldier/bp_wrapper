@@ -132,8 +132,9 @@ int main()
 
   printf("Sub Commitment Test: %s\n", test_sub_comm() ? "Passed" : "Failed");
 
-  printf("");
   printf("Mult Commitment Test: %s\n", test_mult_comm() ? "Passed" : "Failed");
+
+  printf("Proof generation and verification test: %s\n", test_range_proof() ? "Passed" : "Failed");
 
   return 0;
 }
