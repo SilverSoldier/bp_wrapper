@@ -5,7 +5,6 @@ extern crate rand;
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
 use wrapper::curve25519_dalek::{scalar::Scalar, ristretto::CompressedRistretto, ristretto::RistrettoPoint};
 use self::merlin::Transcript;
-use self::rand::{thread_rng};
 use std::slice;
 
 #[no_mangle]
@@ -21,9 +20,9 @@ proof: Range proof as a byte array
 Return:
 Size of proof. O in case of errors.
 */
-pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: *mut [u8;32], blinding_return: *mut [u8;32], proof_return: *mut u8) -> usize {
+pub extern "C" fn gen_proof(secret_value: u64, range: usize, blinding: *const u8, commitment_return: *mut [u8;32], proof_return: *mut u8) -> usize {
 
-    if commitment_return.is_null() || blinding_return.is_null() || proof_return.is_null() {
+    if commitment_return.is_null() || proof_return.is_null() {
         return 0;
     }
 
@@ -32,14 +31,21 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: 
     // Generators for Bulletproofs, valid for proofs upto bitsize 64
     let bp_gens =  BulletproofGens::new(64, 1);
 
-    // The API takes a blinding factor for the commitment.
-    let blinding = Scalar::random(&mut thread_rng());
+    let mut blinding_array = [0; 32];
+    let blinding_scalar = unsafe {
+        if blinding.is_null() {
+            Scalar::zero();
+        }
+        let blinding_bytes = slice::from_raw_parts(blinding, 32);
+        blinding_array.copy_from_slice(blinding_bytes);
+        Scalar::from_bytes_mod_order(blinding_array)
+    };
 
     // The proof can be chained to an existing transcript.
     // Here we create a transcript with a doctest domain separator.
     let mut prover_transcript = Transcript::new(b"hello");
 
-    let (proof, commitment) = match RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, secret_value, &blinding, range) {
+    let (proof, commitment) = match RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, secret_value, &blinding_scalar, range) {
         Ok(ret) => ret,
         Err(err) => {
             println!("{}", err.to_string());
@@ -49,7 +55,6 @@ pub extern "C" fn gen_proof(secret_value: u64, range: usize, commitment_return: 
 
     unsafe {
         *commitment_return = commitment.to_bytes();
-        *blinding_return = blinding.to_bytes();
     }
 
     let proof_bytes = proof.to_bytes();
@@ -110,9 +115,9 @@ pub extern "C" fn verify_proof(proof: *const u8, proof_size: usize, commitment: 
 }
 
 #[no_mangle]
-pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitment_return: *mut [u8;32]) {
+pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitment_return: *mut [u8;32]) -> bool {
     if commitment_return.is_null() {
-        return
+        return false
     }
 
     let mut value_array = [0; 32];
@@ -120,8 +125,8 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
 
     let val_scalar = unsafe {
         if value.is_null() {
-            println!("Value is null.");
-            return
+            println!("Value to commit is null.");
+            return false
         }
         let value_bytes = slice::from_raw_parts(value, 32);
         value_array.copy_from_slice(value_bytes);
@@ -144,9 +149,24 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
     unsafe {
         *commitment_return = commitment.to_bytes();
     };
+
+    true
+
 }
 
-fn op_comm_helper(comm: *const u8) -> Option<RistrettoPoint> {
+fn extract_scal(scal: *const u8) -> Scalar {
+    let mut scal_array = [0; 32];
+    unsafe {
+        if scal.is_null() {
+            Scalar::zero();
+        }
+        let scal_bytes = slice::from_raw_parts(scal, 32);
+        scal_array.copy_from_slice(scal_bytes);
+        Scalar::from_bytes_mod_order(scal_array)
+    }
+}
+
+fn extract_comm(comm: *const u8) -> Option<RistrettoPoint> {
     let comm_bytes = unsafe {
         if comm.is_null() {
             println!("Commitment is null.");
@@ -156,7 +176,6 @@ fn op_comm_helper(comm: *const u8) -> Option<RistrettoPoint> {
     };
 
     CompressedRistretto::from_slice(comm_bytes).decompress() 
-
 }
 
 /** Function to perform add/sub operation on the Pedersen Commitments.
@@ -167,18 +186,18 @@ op: the operation to perform (0: +, 1: -)
  */ 
 #[no_mangle]
 pub extern "C" fn add_commitment(comm1: *const u8, comm2: *const u8, op: i32, commitment_return: *mut [u8;32]) -> bool {
-    let comm1_value = match op_comm_helper(comm1) {
+    let comm1_value = match extract_comm(comm1) {
         Some(val) => val,
         None => {
-            println!("Error reading commitment");
+            println!("Error reading commitment of value 1");
             return false
         }
     };
     
-    let comm2_value = match op_comm_helper(comm2) {
+    let comm2_value = match extract_comm(comm2) {
         Some(val) => val,
         None => {
-            println!("Error reading commitment");
+            println!("Error reading commitment of value 2");
             return false
         }
     };
@@ -195,16 +214,16 @@ pub extern "C" fn add_commitment(comm1: *const u8, comm2: *const u8, op: i32, co
     unsafe {
         *commitment_return = comm_result.compress().to_bytes();
     }
-    return true;
+    true
 }
 
 #[no_mangle]
-pub extern "C" fn mult_commitment(comm1: *const u8, scalar: i32, commitment_return: *mut [u8;32]) {
-    let comm1_value = match op_comm_helper(comm1) {
+pub extern "C" fn mult_commitment(comm1: *const u8, scalar: i32, commitment_return: *mut [u8;32]) -> bool {
+    let comm1_value = match extract_comm(comm1) {
         Some(val) => val,
         None => {
             println!("Error reading commitment");
-            return 
+            return  false
         }
     };
 
@@ -218,6 +237,31 @@ pub extern "C" fn mult_commitment(comm1: *const u8, scalar: i32, commitment_retu
         *commitment_return = result.compress().to_bytes();
     }
 
+    true
+}
+
+/** Function to perform add/sub operation on the Scalar values.
+ * Input:
+comm1: operand 1
+comm2: operand 2
+op: the operation to perform (0: +, 1: -)
+ */ 
+#[no_mangle]
+pub extern "C" fn add_scalar(scal1: *const u8, scal2: *const u8, op: i32, scalar_return: *mut [u8;32]) -> bool {
+    let scalar1 = extract_scal(scal1);
+    let scalar2 = extract_scal(scal2);
+
+    let result = match op {
+        0 => scalar1 + scalar2,
+        1 => scalar1 - scalar2,
+        _ => return false
+    };
+
+    unsafe {
+        *scalar_return = result.to_bytes()
+    };
+
+    true
 }
 
 // #[no_mangle]
@@ -270,5 +314,27 @@ mod tests {
         let comm3 = comm2 - comm1 - comm1;
 
         assert_eq!(comm3.compress().to_bytes(), [0;32]);
+    }
+
+    #[test]
+    fn test_scalar_add() {
+        let mut scalar_bytes: [u8; 32] = [0;32];
+
+        let val1: i32 = 15;
+        let val2: i32 = 16;
+        let sum: i32 = 31;
+
+        scalar_bytes[..4].copy_from_slice(&val1.to_le_bytes());
+        let scalar_value1 = Scalar::from_bytes_mod_order(scalar_bytes);
+
+        scalar_bytes[..4].copy_from_slice(&val2.to_le_bytes());
+        let scalar_value2 = Scalar::from_bytes_mod_order(scalar_bytes);
+
+        scalar_bytes[..4].copy_from_slice(&sum.to_le_bytes());
+        let sum_value2 = Scalar::from_bytes_mod_order(scalar_bytes);
+
+        let result = scalar_value1 + scalar_value2;
+        println!("{:?}", result);
+        assert_eq!(sum_value2, result);
     }
 }
