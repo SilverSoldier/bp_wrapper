@@ -124,8 +124,7 @@ int test_mult_comm() {
 
 int main()
 {
-  /* test_range_proof(); */
-  printf("");
+  srand(time(null));
   printf("Generate Commitment Equality Test: %s\n", test_gen_commitment() ? "Passed" : "Failed");
 
   printf("Add Commitment Test: %s\n", test_add_comm() ? "Passed" : "Failed");
