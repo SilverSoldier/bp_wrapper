@@ -93,9 +93,7 @@ pub extern "C" fn verify_proof(proof: *const u8, proof_size: usize, commitment: 
         // CompressedRistretto::from_slice(commitment)
     };
 
-    let commitment = CompressedRistretto::from_slice(commitment_bytes);
-
-    // println!("Commited Value: {:?}", commitment);
+    let comm = CompressedRistretto::from_slice(commitment_bytes);
 
     let range_proof = match RangeProof::from_bytes(proof_bytes) {
         Ok(proof) => proof,
@@ -105,7 +103,7 @@ pub extern "C" fn verify_proof(proof: *const u8, proof_size: usize, commitment: 
         }
     };
 
-    match range_proof.verify_single(&bp_gens, &pc_gens, &mut verifier_transcript, &commitment, range) {
+    match range_proof.verify_single(&bp_gens, &pc_gens, &mut verifier_transcript, &comm, range) {
         Ok(_) => return true,
         Err(err) => {
             println!("Error when verifying proof: {}", err.to_string());
@@ -276,6 +274,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_proof() {
+        let pc_gens = PedersenGens::default();
+        let bp_gens =  BulletproofGens::new(64, 1);
+        let blinding = Scalar::zero();
+        let mut prover_transcript = Transcript::new(b"hello");
+        let mut verifier_transcript = Transcript::new(b"hello");
+
+        let (proof, commitment) = RangeProof::prove_single(&bp_gens, &pc_gens, &mut prover_transcript, 210, &blinding, 8).expect("A real program could handle errors");
+
+        assert!(proof.verify_single(&bp_gens, &pc_gens, &mut verifier_transcript, &commitment, 8).is_ok());
+    }
+
+    #[test]
     fn test_comm_eq() {
         let pc_gens = PedersenGens::default();
 
@@ -334,7 +345,7 @@ mod tests {
         let sum_value2 = Scalar::from_bytes_mod_order(scalar_bytes);
 
         let result = scalar_value1 + scalar_value2;
-        println!("{:?}", result);
+        // println!("{:?}", result);
         assert_eq!(sum_value2, result);
     }
 }
