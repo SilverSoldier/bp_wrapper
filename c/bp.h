@@ -7,3 +7,4 @@ bool gen_commitment(char* value, char* blinding, char* commitment_return);
 bool add_commitment(char* comm1, char* comm2, int op, char* commitment_return);
 bool mult_commitment(char* comm1, int scalar, char* commitment_return);
 bool add_scalar(char* scal1, char* scal2, int op, char* scalar_return);
+bool add_Ncommitments(char* comm, int count, char* commitment_return);

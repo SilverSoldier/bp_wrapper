@@ -3,7 +3,7 @@ extern crate merlin;
 extern crate rand;
 
 use bulletproofs::{BulletproofGens, PedersenGens, RangeProof};
-use wrapper::curve25519_dalek::{scalar::Scalar, ristretto::CompressedRistretto, ristretto::RistrettoPoint};
+use wrapper::curve25519_dalek::{scalar::Scalar, ristretto::CompressedRistretto, ristretto::RistrettoPoint, traits::Identity};
 use self::merlin::Transcript;
 use std::slice;
 
@@ -144,6 +144,8 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
 
     let commitment = pc_gens.commit(val_scalar, blinding_scalar).compress();
 
+    println!("Commitment: {:?}", commitment);
+
     unsafe {
         *commitment_return = commitment.to_bytes();
     };
@@ -187,7 +189,7 @@ pub extern "C" fn add_commitment(comm1: *const u8, comm2: *const u8, op: i32, co
     let comm1_value = match extract_comm(comm1) {
         Some(val) => val,
         None => {
-            println!("Error reading commitment of value 1");
+            println!("Error reading commitment #1");
             return false
         }
     };
@@ -195,7 +197,7 @@ pub extern "C" fn add_commitment(comm1: *const u8, comm2: *const u8, op: i32, co
     let comm2_value = match extract_comm(comm2) {
         Some(val) => val,
         None => {
-            println!("Error reading commitment of value 2");
+            println!("Error reading commitment #2");
             return false
         }
     };
@@ -211,6 +213,42 @@ pub extern "C" fn add_commitment(comm1: *const u8, comm2: *const u8, op: i32, co
 
     unsafe {
         *commitment_return = comm_result.compress().to_bytes();
+    }
+    true
+}
+
+/** Function to perform add N Pedersen Commitments.
+ * Input:
+    comm: array of commitments
+ */ 
+#[no_mangle]
+pub extern "C" fn add_Ncommitments(comm: *const u8, count: usize, commitment_return: *mut [u8;32]) -> bool {
+
+    let mut result: RistrettoPoint = RistrettoPoint::identity();
+
+    unsafe {
+        println!("Entire commitment: {:?}", slice::from_raw_parts(comm, 128));
+    }
+
+    for x in 0 .. count {
+        let comm_bytes = unsafe {
+            slice::from_raw_parts(comm.offset((x * 32) as isize), 32)
+        };
+
+        let comm_value = match CompressedRistretto::from_slice(comm_bytes).decompress() {
+            Some(val) => val,
+            None => {
+                println!("Error reading commitment # {}", x);
+                return false;
+            }
+        };
+
+        result = result + comm_value;
+
+        println!("{:?}", result.compress());
+    }
+    unsafe {
+        *commitment_return = result.compress().to_bytes();
     }
     true
 }
