@@ -144,6 +144,8 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
 
     let commitment = pc_gens.commit(val_scalar, blinding_scalar).compress();
 
+    println!("Commitment: {:?}", commitment);
+
     unsafe {
         *commitment_return = commitment.to_bytes();
     };
@@ -239,6 +241,7 @@ pub extern "C" fn add_Ncommitments(comm: *const u8, count: usize, commitment_ret
 
         result = result + comm_value;
     }
+
     unsafe {
         *commitment_return = result.compress().to_bytes();
     }
