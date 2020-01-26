@@ -144,7 +144,7 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
 
     let commitment = pc_gens.commit(val_scalar, blinding_scalar).compress();
 
-    println!("Commitment: {:?}", commitment);
+    // println!("Commitment: {:?}", commitment);
 
     unsafe {
         *commitment_return = commitment.to_bytes();
@@ -152,6 +152,51 @@ pub extern "C" fn gen_commitment(value: *const u8, blinding: *const u8, commitme
 
     true
 
+}
+
+#[no_mangle]
+pub extern "C" fn gen_ncommitments(value: *const u8, _blinding: *const u8, count: usize, commitment_return: *mut u8) -> bool {
+    if commitment_return.is_null() {
+        return false
+    }
+
+    if value.is_null() {
+        println!("Value to commit is null.");
+        return false
+    }
+
+    for x in 0..count {
+        let mut value_array = [0;32];
+        let _blinding_array = [0;32];
+
+        let val_scalar = unsafe {
+            let value_bytes = slice::from_raw_parts(value.offset((x*32) as isize), 32);
+
+            value_array.copy_from_slice(value_bytes);
+            Scalar::from_bytes_mod_order(value_array)
+
+        };
+
+        let blinding_scalar = Scalar::zero();
+
+        let pc_gens = PedersenGens::default();
+
+        let commitment = pc_gens.commit(val_scalar, blinding_scalar).compress();
+
+        unsafe {
+            // let slice = slice::from_raw_parts(commitment_return.offset((x*32) as isize), 32);
+            // *slice = commitment.to_bytes();
+            // *commitment_return = commitment.to_bytes()[0] as *mut u8;
+
+            let comm_bytes = commitment.to_bytes();
+            let comm_ref: &mut[u8] = slice::from_raw_parts_mut(commitment_return.offset((x*32) as isize), comm_bytes.len());
+
+            comm_ref.copy_from_slice(&comm_bytes);
+
+        };
+    }
+
+    true
 }
 
 fn extract_scal(scal: *const u8) -> Scalar {

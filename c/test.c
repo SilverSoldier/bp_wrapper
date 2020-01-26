@@ -45,9 +45,6 @@ int test_gen_commitment()
   gen_commitment(num1, zero, comm1);
   gen_commitment(num2, zero, comm2);
 
-  for (i = 0; i < 32; i++)
-	printf("%d ", comm1[i]);
-
   for (i = 0; i < 32; i++) {
 	if (comm1[i] != comm2[i]) {
 	  return 0;
@@ -55,6 +52,31 @@ int test_gen_commitment()
   }
   return 1;
 }
+
+/* int test_gen_ncommitments() */
+/* { */
+/*   int i; */
+/*   char val[128] = { 0 }; */
+/*   char zero[32] = { 0 }; */
+/*   char comm[128] = { 0 }; */
+
+/*   val[0] = 10; */
+/*   val[32] = 20; */
+/*   val[64] = 30; */
+/*   val[96] = 0; */
+
+/*   gen_ncommitments(val, zero, 4, comm); */
+
+/*   for (i = 0; i < 32; i++) */
+/*	printf("%d ", comm1[i]); */
+
+/*   for (i = 0; i < 32; i++) { */
+/*	if (comm1[i] != comm2[i]) { */
+/*	  return 0; */
+/*	} */
+/*   } */
+/*   return 1; */
+/* } */
 
 int test_add_comm()
 {
@@ -129,7 +151,8 @@ int test_add_comm2()
 
   // Generate commitments for all values
   for (i = 0; i < 4; ++i) {
-	gen_commitment(val + 32 * i, zero, comm + 32 * i);
+	gen_ncommitments(val, zero, 4, comm);
+	/* gen_commitment(val + 32 * i, zero, comm + 32 * i); */
   }
 
   gen_commitment(val_exp, zero, comm_exp);
